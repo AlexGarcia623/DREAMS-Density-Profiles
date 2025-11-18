@@ -1,3 +1,8 @@
 *.ipynb_checkpoints/*
 *.pyc
 __pycache__/*
+
+
+Models/*.npy
+Databases/optuna*
+Outputs/*_*
