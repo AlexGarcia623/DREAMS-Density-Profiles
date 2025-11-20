@@ -42,8 +42,28 @@ mpl.rcParams['ytick.minor.size'] = 4.5
 mpl.rcParams['xtick.top']   = True
 mpl.rcParams['ytick.right'] = True
 
+
+halo_mass  = np.load('./data/halo_mass.npy')
+def norm_params(params):
+    nparams = params / np.array([1, 1, 3.6, 7.4, .1, 1.0])
+    
+    minimum = np.array([0.274, 0.780, 0.25, 0.5, 0.25, np.min(halo_mass)])
+    maximum = np.array([0.354, 0.888,  4.0, 2.0, 4.0 , np.max(halo_mass)])
+
+    nparams = (nparams - minimum)/(maximum - minimum)
+    
+    return nparams
+
 param_path = '/standard/DREAMS/Parameters/CDM/MW_zooms/CDM_TNG_MW_SB5.txt'
 sim_params = tutorial.get_params(param_path)
+params     = tutorial.get_params(param_path)
+params     = np.array(params)
+sat_params = [] ## add in halo mass
+for box in range(1024):
+    c = list(params[box])
+    c.append(halo_mass[box])
+    sat_params.append(c)
+sim_params = np.array(sat_params)
 
 boxes      = np.arange(1024)
 snap       = 90
@@ -54,7 +74,7 @@ rvir = np.load('./data/rvir.npy') / h
 
 best_params = []
 
-with h5py.File('gnfw.hdf5', 'r') as file:
+with h5py.File('./data/gnfw.hdf5', 'r') as file:
     for box in boxes:
         best_params.append(list(file[f'box_{box:04d}']['params']))
     
@@ -72,6 +92,7 @@ def get_emulator_param(which,npoints=1000):
     bhff    = np.ones(npoints)*0.1
     omega_m = np.ones(npoints)*0.31
     sigma_8 = np.ones(npoints)*0.8159
+    mhalo   = np.ones(npoints)*12.0
 
     if which == 0:
         sn1 = np.linspace(0.25,4.0,npoints)*3.6
@@ -88,10 +109,13 @@ def get_emulator_param(which,npoints=1000):
     elif which == 4:
         sigma_8 = np.linspace(0.780,0.888,npoints)
         var = sigma_8
+    elif which == 5:
+        mhalo = np.linspace(np.log10(5.8e11), np.log10(2e12), npoints)
+        var = mhalo
     
     # Set up the emulator params (features to input into the model)
-    emulator_params = np.array([omega_m, sigma_8, sn1, sn2, bhff]).T
-    x = em.norm_params(emulator_params)
+    emulator_params = np.array([omega_m, sigma_8, sn1, sn2, bhff, mhalo]).T
+    x = norm_params(emulator_params)
     return x, var
 
 ## Get GPU
@@ -123,7 +147,7 @@ for i in range(10):
     n_layers      = params["n_layers"]
     out_features  = [params[f"n_units_l{i}"] for i in range(n_layers)]
     dropout_rate  = [params[f"dropout_l{i}"] for i in range(n_layers)]
-    input_size    = 5
+    input_size    = 6
     output_size   = 3
     nepoch        = 500
     name_model    = name
@@ -267,4 +291,4 @@ for index, text in enumerate(leg.get_texts()):
         
 plt.tight_layout()
 # plt.subplots_adjust(wspace=0.025, hspace=0.3)
-plt.savefig('./figs/Figure5_only_sn1.pdf', bbox_inches='tight')
+plt.savefig('./figs/Figure4.pdf', bbox_inches='tight')

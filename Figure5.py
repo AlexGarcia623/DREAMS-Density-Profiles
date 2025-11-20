@@ -44,15 +44,27 @@ mpl.rcParams['ytick.right'] = True
 ### Load Simulation Params ###
 ##############################
 
+halo_mass  = np.load('./data/halo_mass.npy')
+def norm_params(params):
+    nparams = params / np.array([1, 1, 3.6, 7.4, .1, 1.0])
+    
+    minimum = np.array([0.274, 0.780, 0.25, 0.5, 0.25, np.min(halo_mass)])
+    maximum = np.array([0.354, 0.888,  4.0, 2.0, 4.0 , np.max(halo_mass)])
 
-# def get_params():
-#### Copy this from your training script
+    nparams = (nparams - minimum)/(maximum - minimum)
+    
+    return nparams
 
 param_path = '/standard/DREAMS/Parameters/CDM/MW_zooms/CDM_TNG_MW_SB5.txt'
 sim_params = tutorial.get_params(param_path)
-sim_params = [sim_params[:,2], sim_params[:,3], sim_params[:,4], sim_params[:,0], sim_params[:,1]]
-
-## ^^^ Note that I changed this so that the astrophysics params are on the top row
+params     = tutorial.get_params(param_path)
+params     = np.array(params)
+sat_params = [] ## add in halo mass
+for box in range(1024):
+    c = list(params[box])
+    c.append(halo_mass[box])
+    sat_params.append(c)
+sim_params = np.array(sat_params)
 
 ######################################################
 ### Load in data *exactly* as you did for training ###
@@ -61,7 +73,7 @@ sim_params = [sim_params[:,2], sim_params[:,3], sim_params[:,4], sim_params[:,0]
 boxes      = np.arange(1024)
 snap       = 90
 h          = 0.6909
-in_file    = 'CDM_baryon_contract_update.hdf5'
+in_file    = './data/CDM_baryon_contract_update.hdf5'
 
 slopes     = np.zeros(len(boxes))
 rvir       = np.load('./data/rvir.npy') / h
@@ -96,31 +108,17 @@ with h5py.File(in_file, 'r') as file:
         
 no_nans = ~np.isnan(slopes)
 slopes  = slopes[no_nans]
-sim_params = [sim_params[i][no_nans] for i in range(5)]
+sim_params = sim_params[no_nans, :]
 ######################################################
 
     
 def get_emulator_param(which,npoints=1000):
-    '''Decide which parameter you want to vary and by how much
-    
-    Inputs
-    - which: (int) corresponding to which parameter you want to vary
-                    0 -> SN1
-                    1 -> SN2
-                    2 -> AGN
-                    3 -> Omega_m
-                    4 -> Sigma8
-    - npoints: (int) corresponding to number of samples to make
-    
-    Outputs
-    - normalized predictions
-    - variable you varied (for plotting)
-    '''
     sn1     = np.ones(npoints)*3.6
     sn2     = np.ones(npoints)*7.4
     bhff    = np.ones(npoints)*0.1
     omega_m = np.ones(npoints)*0.31
     sigma_8 = np.ones(npoints)*0.8159
+    mhalo   = np.ones(npoints)*12.0
 
     if which == 0:
         sn1 = np.linspace(0.25,4.0,npoints)*3.6
@@ -137,10 +135,13 @@ def get_emulator_param(which,npoints=1000):
     elif which == 4:
         sigma_8 = np.linspace(0.780,0.888,npoints)
         var = sigma_8
+    elif which == 5:
+        mhalo = np.linspace(np.log10(5.8e11), np.log10(2e12), npoints)
+        var = mhalo
     
     # Set up the emulator params (features to input into the model)
-    emulator_params = np.array([omega_m, sigma_8, sn1, sn2, bhff]).T
-    x = em.norm_params(emulator_params)
+    emulator_params = np.array([omega_m, sigma_8, sn1, sn2, bhff, mhalo]).T
+    x = norm_params(emulator_params)
     return x, var
 
 ## Get GPU if available
@@ -184,7 +185,7 @@ for i in range(10): ## for i in range(n_models_you_trained)
     dropout_rate  = [params[f"dropout_l{i}"] for i in range(n_layers)]
     
     ### i/o
-    input_size    = 5
+    input_size    = 6
     output_size   = 1
     nepoch        = 100  ## not sure it matters if you get this right or not?
     name_model    = name
@@ -346,4 +347,4 @@ axs[3].set_ylabel(r'$\Gamma_{0.01}$')
 
 plt.tight_layout()
 plt.subplots_adjust(wspace=0.025, hspace=0.3)
-plt.savefig('./figs/Figure7.pdf', bbox_inches='tight')
+plt.savefig('./figs/Figure5.pdf', bbox_inches='tight')

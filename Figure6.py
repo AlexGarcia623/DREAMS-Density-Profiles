@@ -43,6 +43,17 @@ mpl.rcParams['ytick.right'] = True
 param_path = '/standard/DREAMS/Parameters/CDM/MW_zooms/CDM_TNG_MW_SB5.txt'
 sim_params = tutorial.get_params(param_path)
 
+halo_mass  = np.load('./data/halo_mass.npy')
+def norm_params(params):
+    nparams = params / np.array([1, 1, 3.6, 7.4, .1, 1.0])
+    
+    minimum = np.array([0.274, 0.780, 0.25, 0.5, 0.25, np.min(halo_mass)])
+    maximum = np.array([0.354, 0.888,  4.0, 2.0, 4.0 , np.max(halo_mass)])
+
+    nparams = (nparams - minimum)/(maximum - minimum)
+    
+    return nparams
+
 boxes      = np.arange(1024)
 snap       = 90
 h          = 0.6909
@@ -52,6 +63,7 @@ rvir = np.load('./data/rvir.npy') / h
 
 best_params = []
 
+halo_mass    = np.load('./data/halo_mass.npy')
 stellar_mass = np.load('./data/stellar_mass.npy')
 bh_mass      = np.load('./data/bh_mass.npy')
 
@@ -71,7 +83,7 @@ slopes = slopes[mask,:]
 mask_b   = bh_mass > 0
 slopes_b = slopes_b[mask_b,:]
 
-sim_params = [sim_params[:,2], sim_params[:,3], sim_params[:,4], sim_params[:,0], sim_params[:,1]]
+sim_params = [sim_params[:,2], sim_params[:,3], sim_params[:,4], sim_params[:,0], sim_params[:,1], halo_mass]
 
 cmap = cmr.get_sub_cmap('cmr.pepper', 0.1, 0.9, N=1024)
 
@@ -81,6 +93,7 @@ def get_emulator_param(which,npoints=1000):
     bhff    = np.ones(npoints)*0.1
     omega_m = np.ones(npoints)*0.31
     sigma_8 = np.ones(npoints)*0.8159
+    mhalo   = np.ones(npoints)*12.0
 
     if which == 0:
         sn1 = np.linspace(0.25,4.0,npoints)*3.6
@@ -97,10 +110,13 @@ def get_emulator_param(which,npoints=1000):
     elif which == 4:
         sigma_8 = np.linspace(0.780,0.888,npoints)
         var = sigma_8
+    elif which == 5:
+        mhalo = np.linspace(np.log10(5.8e11), np.log10(2e12), npoints)
+        var = mhalo
     
     # Set up the emulator params (features to input into the model)
-    emulator_params = np.array([omega_m, sigma_8, sn1, sn2, bhff]).T
-    x = em.norm_params(emulator_params)
+    emulator_params = np.array([omega_m, sigma_8, sn1, sn2, bhff, mhalo]).T
+    x = norm_params(emulator_params)
     return x, var
 
 ## Get GPU
@@ -140,7 +156,7 @@ for i in range(10):
     n_layers      = params["n_layers"]
     out_features  = [params[f"n_units_l{i}"] for i in range(n_layers)]
     dropout_rate  = [params[f"dropout_l{i}"] for i in range(n_layers)]
-    input_size    = 5
+    input_size    = 6
     output_size   = 2
     nepoch        = 500
     name_model    = name
@@ -210,7 +226,7 @@ for i in range(10):
     n_layers      = params["n_layers"]
     out_features  = [params[f"n_units_l{i}"] for i in range(n_layers)]
     dropout_rate  = [params[f"dropout_l{i}"] for i in range(n_layers)]
-    input_size    = 5
+    input_size    = 6
     output_size   = 2
     nepoch        = 500
     name_model    = name
@@ -296,13 +312,39 @@ for i, this_pred in enumerate(all_preds):
                     color=colors[i], alpha=0.35)
     ax.plot(this_var,ensemble_mean[:, 0] + total_uncertainty[:, 0],color=colors[i], lw=1)
     ax.plot(this_var,ensemble_mean[:, 0] - total_uncertainty[:, 0],color=colors[i], lw=1)
+
+    # _x_ = this_sp[mask]
+    # _y_ = slopes[:,0]
+    # if i == 2:
+    #     _x_ = this_sp[mask_b]
+    #     _y_ = slopes_b[:, 0]
+    # ax.scatter(_x_, _y_, color=colors[i], marker='o', s=10, alpha=0.3,
+    #            rasterized=True, facecolor='none')
     
+    # validation_x    = np.linspace(np.min(_x_), np.max(_x_), 40)
+    # dx = validation_x[1] - validation_x[0]
+
+    # validation_x    = np.linspace(np.min(_x_), np.max(_x_)+dx, 40)
+    # validation_y    = np.zeros(len(validation_x))
+    # validation_yerr = np.zeros(len(validation_x))
+
+    # for index, x in enumerate(validation_x):
+    #     within_dx = (_x_ > x) & (_x_ < x+dx)
+    #     validation_y[index]    = np.mean(_y_[within_dx])
+    #     validation_yerr[index] = np.std(_y_[within_dx])
+
+    # ax.plot(validation_x, validation_y, color='k', lw=3)
+    # ax.fill_between(validation_x, 
+    #                 validation_y+validation_yerr,
+    #                 validation_y-validation_yerr,
+    #                 color='k', alpha=0.3
+    # )
     
     ax.set_xlabel(labels[i])
         
     ax.axvline(x=fids[i],ymin=0.9,ymax=1, color='tomato' if BW else 'red', ls='-', alpha=0.5,lw=2)
     
-    yval = 10.9
+    yval = 11.05
     if i == 2:
         yval = 8.09
     ax.text(txt_locs[i],yval,r'${\rm TNG~Fiducial}$',color='red',
@@ -331,4 +373,4 @@ axs[1].set_yticklabels([])
     
 plt.tight_layout()
 plt.subplots_adjust(wspace=0.025, hspace=0.225)
-plt.savefig('./figs/astro_variations.pdf', bbox_inches='tight')
+plt.savefig('./figs/Figure6.pdf', bbox_inches='tight')
