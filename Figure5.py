@@ -112,13 +112,13 @@ sim_params = sim_params[no_nans, :]
 ######################################################
 
     
-def get_emulator_param(which,npoints=1000):
+def get_emulator_param(which,npoints=1000, default_halo_mass=12):
     sn1     = np.ones(npoints)*3.6
     sn2     = np.ones(npoints)*7.4
     bhff    = np.ones(npoints)*0.1
     omega_m = np.ones(npoints)*0.31
     sigma_8 = np.ones(npoints)*0.8159
-    mhalo   = np.ones(npoints)*12.0
+    mhalo   = np.ones(npoints)*default_halo_mass
 
     if which == 0:
         sn1 = np.linspace(0.25,4.0,npoints)*3.6
@@ -151,195 +151,219 @@ else:
     device = torch.device('cpu')
 print(device)
 
-
-all_preds_sn1 = []
-all_errs_sn1  = []
-all_preds_sn2 = []
-all_errs_sn2  = []
-all_preds_agn = []
-all_errs_agn  = []
-all_preds_om  = []
-all_errs_om   = []
-all_preds_s8  = []
-all_errs_s8   = []
-
-sn1 = None
-sn2 = None
-agn = None
-om  = None
-s8  = None
-
-for i in range(10): ## for i in range(n_models_you_trained)
-    name    = f"mass_growth" ### name of model you ran
-    storage = f"sqlite:///{os.getcwd()}/Databases/optuna_{name}_{i:02d}"
-
-    study = optuna.load_study(study_name=name, storage=storage)
-
-    best_trial = study.best_trial
-    params     = best_trial.params
-
-    learning_rate = params["learning_rate"]
-    weight_decay  = params["weight_decay"]
-    n_layers      = params["n_layers"]
-    out_features  = [params[f"n_units_l{i}"] for i in range(n_layers)]
-    dropout_rate  = [params[f"dropout_l{i}"] for i in range(n_layers)]
-    
-    ### i/o
-    input_size    = 6
-    output_size   = 1
-    nepoch        = 100  ## not sure it matters if you get this right or not?
-    name_model    = name
-
-    hparams = em.Hyperparameters(
-        learning_rate,
-        weight_decay,
-        n_layers,
-        out_features,
-        dropout_rate,
-        nepoch,
-        output_size,
-        name_model,
-        input_size
-    )
-
-    model = em.load_model(hparams, device=device).to(device)
-
-    for p in range(5):
-        x, var = get_emulator_param(p)
-        eparam = torch.tensor(x, dtype=torch.float, device=device)
-                
-        ## Make predictions using the model
-        pred = model(eparam).cpu().detach().numpy()
-        out = model(eparam).cpu().detach().numpy()
-        means    = out[:, 0]
-        raw_std  = out[:, 1]
-        pred_std = np.log1p(np.exp(raw_std))
-
-        mean = np.mean(slopes, axis=0)
-        std = np.std(slopes, axis=0)
-        out = (slopes - mean) / std
-        
-        y = means * std + mean
-        e = pred_std * std
-
-        ## Get astroparams in log
-        if p in [0, 1, 2]:
-            var = np.log10(var)
-        
-        ## Store predictions and uncertainties
-        if p == 0:
-            all_preds_sn1.append(y)
-            all_errs_sn1.append(e)
-            sn1 = var
-        elif p == 1:
-            all_preds_sn2.append(y)
-            all_errs_sn2.append(e)
-            sn2 = var
-        elif p == 2:
-            all_preds_agn.append(y)
-            all_errs_agn.append(e)
-            agn = var
-        elif p == 3:
-            all_preds_om.append(y)
-            all_errs_om.append(e)
-            om = var
-        elif p == 4:
-            all_preds_s8.append(y)
-            all_errs_s8.append(e)
-            s8 = var
-                
-all_preds_sn1 = np.array(all_preds_sn1)
-all_errs_sn1  = np.array(all_errs_sn1 )
-all_preds_sn2 = np.array(all_preds_sn2)
-all_errs_sn2  = np.array(all_errs_sn2 )
-all_preds_agn = np.array(all_preds_agn)
-all_errs_agn  = np.array(all_errs_agn )
-all_preds_om  = np.array(all_preds_om )
-all_errs_om   = np.array(all_errs_om  )
-all_preds_s8  = np.array(all_preds_s8 )
-all_errs_s8   = np.array(all_errs_s8  )
-
-#################
-### Make Plot ###
-#################
-
 fig, axs = plt.subplots(2,3, figsize=(13,7), sharey=True)
 axs = axs.flatten()
 
-# labels = [r'$\log(A_{\rm SN1})$',r'$\log(A_{\rm SN2})$',r'$\log(A_{\rm AGN})$',
-#           r'$\Omega_{\rm M}$', r'$\sigma_8$']
-labels = [r'$\log(\bar{e}_w)$', r'$\log(\kappa_w)$', r'$\log(\epsilon_{f,\,{\rm high}})$',
-          r'$\Omega_{\rm M}$', r'$\sigma_8$']
-fids      = [np.log10(3.6), np.log10(7.4), np.log10(0.1), 0.31, 0.8159] ## fiducial values
-txt_locs  = [np.log10(3.8), np.log10(7.6), np.log10(0.105), 0.306, 0.811] ## text locations for fiducial values
+halo_masses = [12.0, 11.8, 12.2]
+for hhh, mhalo in enumerate(halo_masses):
+    print(f'Starting {hhh}...')
+    all_preds_sn1 = []
+    all_errs_sn1  = []
+    all_preds_sn2 = []
+    all_errs_sn2  = []
+    all_preds_agn = []
+    all_errs_agn  = []
+    all_preds_om  = []
+    all_errs_om   = []
+    all_preds_s8  = []
+    all_errs_s8   = []
+    
+    sn1 = None
+    sn2 = None
+    agn = None
+    om  = None
+    s8  = None
+    
+    for i in range(10): ## for i in range(n_models_you_trained)
+        name    = f"mass_growth" ### name of model you ran
+        storage = f"sqlite:///{os.getcwd()}/Databases/optuna_{name}_{i:02d}"
+    
+        study = optuna.load_study(study_name=name, storage=storage)
+    
+        best_trial = study.best_trial
+        params     = best_trial.params
+    
+        learning_rate = params["learning_rate"]
+        weight_decay  = params["weight_decay"]
+        n_layers      = params["n_layers"]
+        out_features  = [params[f"n_units_l{i}"] for i in range(n_layers)]
+        dropout_rate  = [params[f"dropout_l{i}"] for i in range(n_layers)]
+        
+        ### i/o
+        input_size    = 6
+        output_size   = 1
+        nepoch        = 100  ## not sure it matters if you get this right or not?
+        name_model    = name
+    
+        hparams = em.Hyperparameters(
+            learning_rate,
+            weight_decay,
+            n_layers,
+            out_features,
+            dropout_rate,
+            nepoch,
+            output_size,
+            name_model,
+            input_size
+        )
+    
+        model = em.load_model(hparams, device=device).to(device)
+    
+        for p in range(5):
+            x, var = get_emulator_param(p, default_halo_mass=mhalo)
+            eparam = torch.tensor(x, dtype=torch.float, device=device)
+                    
+            ## Make predictions using the model
+            pred = model(eparam).cpu().detach().numpy()
+            out = model(eparam).cpu().detach().numpy()
+            means    = out[:, 0]
+            raw_std  = out[:, 1]
+            pred_std = np.log1p(np.exp(raw_std))
+    
+            mean = np.mean(slopes, axis=0)
+            std = np.std(slopes, axis=0)
+            out = (slopes - mean) / std
+            
+            y = means * std + mean
+            e = pred_std * std
+    
+            ## Get astroparams in log
+            if p in [0, 1, 2]:
+                var = np.log10(var)
+            
+            ## Store predictions and uncertainties
+            if p == 0:
+                all_preds_sn1.append(y)
+                all_errs_sn1.append(e)
+                sn1 = var
+            elif p == 1:
+                all_preds_sn2.append(y)
+                all_errs_sn2.append(e)
+                sn2 = var
+            elif p == 2:
+                all_preds_agn.append(y)
+                all_errs_agn.append(e)
+                agn = var
+            elif p == 3:
+                all_preds_om.append(y)
+                all_errs_om.append(e)
+                om = var
+            elif p == 4:
+                all_preds_s8.append(y)
+                all_errs_s8.append(e)
+                s8 = var
+                    
+    all_preds_sn1 = np.array(all_preds_sn1)
+    all_errs_sn1  = np.array(all_errs_sn1 )
+    all_preds_sn2 = np.array(all_preds_sn2)
+    all_errs_sn2  = np.array(all_errs_sn2 )
+    all_preds_agn = np.array(all_preds_agn)
+    all_errs_agn  = np.array(all_errs_agn )
+    all_preds_om  = np.array(all_preds_om )
+    all_errs_om   = np.array(all_errs_om  )
+    all_preds_s8  = np.array(all_preds_s8 )
+    all_errs_s8   = np.array(all_errs_s8  )
+    
+    #################
+    ### Make Plot ###
+    #################
+    
+    # labels = [r'$\log(A_{\rm SN1})$',r'$\log(A_{\rm SN2})$',r'$\log(A_{\rm AGN})$',
+    #           r'$\Omega_{\rm M}$', r'$\sigma_8$']
+    labels = [r'$\log(\bar{e}_w)$', r'$\log(\kappa_w)$', r'$\log(\epsilon_{f,\,{\rm high}})$',
+              r'$\Omega_{\rm M}$', r'$\sigma_8$']
+    fids      = [np.log10(3.6), np.log10(7.4), np.log10(0.1), 0.31, 0.8159] ## fiducial values
+    txt_locs  = [np.log10(3.8), np.log10(7.6), np.log10(0.105), 0.306, 0.811] ## text locations for fiducial values
+    
+    all_preds = [
+        all_preds_sn1, all_preds_sn2, all_preds_agn,
+        all_preds_om , all_preds_s8
+    ]
+    all_errs = [
+        all_errs_sn1, all_errs_sn2, all_errs_agn,
+        all_errs_om , all_errs_s8
+    ]
+    all_vars = [
+        sn1, sn2, agn, om, s8
+    ]
+    
+    names = [
+        'sn1', 'sn2', 'agn', 'omega_m', 'sigma_8'
+    ]
+    
+    for i, this_pred in enumerate(all_preds):
+        this_err  = all_errs[i]
+        this_var  = all_vars[i]
+        ax        = axs[i]
+        this_sp   = np.log10(sim_params[i]) if i < 3 else sim_params[i]
+        this_name = names[i]
+        print(this_name)
+        
+        # Compute ensemble mean and standard deviation
+        ensemble_mean = np.mean(this_pred, axis=0)
+        ensemble_std  = np.std(this_pred, axis=0)
+    
+        # Compute the total uncertainty (aleatoric + epistemic)
+        model_uncertainty = np.mean(this_err, axis=0)
+        total_uncertainty = np.sqrt(ensemble_std**2 + np.mean(this_err**2, axis=0))
+        
+        print(np.mean(total_uncertainty))
 
-all_preds = [
-    all_preds_sn1, all_preds_sn2, all_preds_agn,
-    all_preds_om , all_preds_s8
+        if hhh == 0:
+            # Plot the final ensemble prediction with uncertainty
+            ax.plot(this_var, ensemble_mean, color='k', lw=4.5)
+            ax.plot(this_var, ensemble_mean, color=cmap(0.6) if BW else cmap(0.25), lw=3)
+            ax.fill_between(this_var, (ensemble_mean + total_uncertainty), (ensemble_mean - total_uncertainty),
+                            color=cmap(0.6) if BW else cmap(0.25), alpha=0.5)
+            ax.plot(this_var, (ensemble_mean + total_uncertainty), color=cmap(0.6) if BW else cmap(0.25), lw=1)
+            ax.plot(this_var, (ensemble_mean - total_uncertainty), color=cmap(0.6) if BW else cmap(0.25), lw=1)
+
+            ax.set_xlabel(labels[i])
+    
+            ax.axhline(0.0, color='gray', ls='--', lw=2, alpha=0.5, zorder=-1)
+            
+            ax.axvline(x=fids[i],ymin=0.9,ymax=1, color='red', ls='-', alpha=0.5,lw=2)
+            ax.text(txt_locs[i],0.65,r'${\rm TNG~Fiducial}$',color='red',fontsize=12,ha='left',va='bottom', alpha=0.5)
+        else:
+            lss = [None,'--',':']
+            ax.plot(this_var, ensemble_mean, color=cmap(0.6) if BW else cmap(0.25), lw=3, ls=lss[hhh])
+            
+        
+    #     validation_x    = np.linspace(np.min(this_sp), np.max(this_sp), 40)
+    #     dx = validation_x[1] - validation_x[0]
+    
+    #     validation_x    = np.linspace(np.min(this_sp), np.max(this_sp)+dx, 40)
+    #     validation_y    = np.zeros(len(validation_x))
+    #     validation_yerr = np.zeros(len(validation_x))
+    
+    #     for index, x in enumerate(validation_x):
+    #         within_dx = (this_sp > x) & (this_sp < x+dx)
+    #         validation_y[index]    = np.mean(slopes[within_dx])
+    #         validation_yerr[index] = np.std(slopes[within_dx])
+    
+    #     ax.plot(validation_x, validation_y, color='k', lw=3)
+    #     ax.fill_between(validation_x, 
+    #                     validation_y+validation_yerr,
+    #                     validation_y-validation_yerr,
+    #                     color='k', alpha=0.3
+    #     )
+
+legend_elements = [
+    Line2D([0], [0], color=cmap(0.25), lw=2, ls='--', label=r'$M_{\rm Halo}=10^{11.8}~{\rm M}_\odot$'),
+    Line2D([0], [0], color=cmap(0.25), lw=2, ls='-' , label=r'$M_{\rm Halo}=10^{12.0}~{\rm M}_\odot$'),
+    Line2D([0], [0], color=cmap(0.25), lw=2, ls=':' , label=r'$M_{\rm Halo}=10^{12.2}~{\rm M}_\odot$'),
 ]
-all_errs = [
-    all_errs_sn1, all_errs_sn2, all_errs_agn,
-    all_errs_om , all_errs_s8
+
+legend_labels = [
+    r'$M_{\rm Halo}=10^{11.8}~{\rm M}_\odot$',
+    r'$M_{\rm Halo}=10^{12.0}~{\rm M}_\odot$',
+    r'$M_{\rm Halo}=10^{12.2}~{\rm M}_\odot$',
 ]
-all_vars = [
-    sn1, sn2, agn, om, s8
-]
-
-names = [
-    'sn1', 'sn2', 'agn', 'omega_m', 'sigma_8'
-]
-
-for i, this_pred in enumerate(all_preds):
-    this_err  = all_errs[i]
-    this_var  = all_vars[i]
-    ax        = axs[i]
-    this_sp   = np.log10(sim_params[i]) if i < 3 else sim_params[i]
-    this_name = names[i]
-    print(this_name)
-    
-    # Compute ensemble mean and standard deviation
-    ensemble_mean = np.mean(this_pred, axis=0)
-    ensemble_std  = np.std(this_pred, axis=0)
-
-    # Compute the total uncertainty (aleatoric + epistemic)
-    model_uncertainty = np.mean(this_err, axis=0)
-    total_uncertainty = np.sqrt(ensemble_std**2 + np.mean(this_err**2, axis=0))
-    
-    print(np.mean(total_uncertainty))
-    
-    # Plot the final ensemble prediction with uncertainty
-    ax.plot(this_var, ensemble_mean, color='k', lw=4.5)
-    ax.plot(this_var, ensemble_mean, color=cmap(0.6) if BW else cmap(0.25), lw=3)
-    ax.fill_between(this_var, (ensemble_mean + total_uncertainty), (ensemble_mean - total_uncertainty),
-                    color=cmap(0.6) if BW else cmap(0.25), alpha=0.5)
-    ax.plot(this_var, (ensemble_mean + total_uncertainty), color=cmap(0.6) if BW else cmap(0.25), lw=1)
-    ax.plot(this_var, (ensemble_mean - total_uncertainty), color=cmap(0.6) if BW else cmap(0.25), lw=1)
-    
-#     validation_x    = np.linspace(np.min(this_sp), np.max(this_sp), 40)
-#     dx = validation_x[1] - validation_x[0]
-
-#     validation_x    = np.linspace(np.min(this_sp), np.max(this_sp)+dx, 40)
-#     validation_y    = np.zeros(len(validation_x))
-#     validation_yerr = np.zeros(len(validation_x))
-
-#     for index, x in enumerate(validation_x):
-#         within_dx = (this_sp > x) & (this_sp < x+dx)
-#         validation_y[index]    = np.mean(slopes[within_dx])
-#         validation_yerr[index] = np.std(slopes[within_dx])
-
-#     ax.plot(validation_x, validation_y, color='k', lw=3)
-#     ax.fill_between(validation_x, 
-#                     validation_y+validation_yerr,
-#                     validation_y-validation_yerr,
-#                     color='k', alpha=0.3
-#     )
-
-    ax.set_xlabel(labels[i])
-
-    ax.axhline(0.0, color='gray', ls='--', lw=2, alpha=0.5, zorder=-1)
-    
-    ax.axvline(x=fids[i],ymin=0.9,ymax=1, color='red', ls='-', alpha=0.5,lw=2)
-    ax.text(txt_locs[i],0.65,r'${\rm TNG~Fiducial}$',color='red',fontsize=12,ha='left',va='bottom', alpha=0.5)
+leg = axs[2].legend(legend_elements, legend_labels, loc='lower right', frameon=True,
+                    fontsize=12)
+frame = leg.get_frame()
+frame.set_boxstyle("square")
+frame.set_alpha(0.5)
 
 axs[0].text(-0.05,0.025,r'${\rm No~Change}$', color='gray', fontsize=14)
 axs[0].set_ylabel(r'$\Gamma_{0.01}$')

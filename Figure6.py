@@ -87,13 +87,13 @@ sim_params = [sim_params[:,2], sim_params[:,3], sim_params[:,4], sim_params[:,0]
 
 cmap = cmr.get_sub_cmap('cmr.pepper', 0.1, 0.9, N=1024)
 
-def get_emulator_param(which,npoints=1000):
+def get_emulator_param(which,npoints=1000, default_halo_mass=12):
     sn1     = np.ones(npoints)*3.6
     sn2     = np.ones(npoints)*7.4
     bhff    = np.ones(npoints)*0.1
     omega_m = np.ones(npoints)*0.31
     sigma_8 = np.ones(npoints)*0.8159
-    mhalo   = np.ones(npoints)*12.0
+    mhalo   = np.ones(npoints)*default_halo_mass
 
     if which == 0:
         sn1 = np.linspace(0.25,4.0,npoints)*3.6
@@ -126,232 +126,243 @@ else:
     device = torch.device('cpu')
 print(device)
 
-
-all_preds_sn1 = []
-all_errs_sn1  = []
-all_preds_sn2 = []
-all_errs_sn2  = []
-all_preds_agn = []
-all_errs_agn  = []
-
-sn1 = None
-sn2 = None
-agn = None
-om  = None
-s8  = None
-
-s = []
-
-for i in range(10):
-    name    = f"sh_mass"
-    storage = f"sqlite:///{os.getcwd()}/Databases/optuna_{name}_{i:02d}"
-
-    study = optuna.load_study(study_name=name, storage=storage)
-
-    best_trial = study.best_trial
-    params     = best_trial.params
-
-    learning_rate = params["learning_rate"]
-    weight_decay  = params["weight_decay"]
-    n_layers      = params["n_layers"]
-    out_features  = [params[f"n_units_l{i}"] for i in range(n_layers)]
-    dropout_rate  = [params[f"dropout_l{i}"] for i in range(n_layers)]
-    input_size    = 6
-    output_size   = 2
-    nepoch        = 500
-    name_model    = name
-
-    hparams = em.Hyperparameters(
-        learning_rate,
-        weight_decay,
-        n_layers,
-        out_features,
-        dropout_rate,
-        nepoch,
-        output_size,
-        name_model,
-        input_size
-    )
-
-    model = em.load_model(hparams, device=device).to(device)
-
-    for p in [0, 1]:
-        x, var = get_emulator_param(p)
-        eparam = torch.tensor(x, dtype=torch.float, device=device)
-                
-        # Make predictions using the model
-        out = model(eparam).cpu().detach().numpy()
-        means = out[:, :output_size]
-        stds  = out[:, output_size:]
-        
-        mean = np.mean(slopes, axis=0)
-        std = np.std(slopes, axis=0)
-        out = (slopes - mean) / std
-        
-        y = means * std + mean
-        e = stds * std
-        # Denormalize the predictions
-#         out  = np.log10(slopes + 1)
-#         mean = np.mean(out, axis=0)
-#         std  = np.std(out, axis=0)
-
-#         y    = np.power(10, pred[:, 0] * std + mean) - 1  # Predicted values
-#         e    = np.log(10) * std * np.power(10, pred[:, 0] * std + mean) * pred[:, 1]  # Uncertainty (error)
-
-        # Plot for individual model (optional)
-        if p in [0, 1, 2]:
-            var = np.log10(var)
-        
-        # Store predictions and uncertainties
-        if p == 0:
-            all_preds_sn1.append(y)
-            all_errs_sn1.append(e)
-            sn1 = var
-        elif p == 1:
-            all_preds_sn2.append(y)
-            all_errs_sn2.append(e)
-            sn2 = var
-
-for i in range(10):
-    name    = f"bh_mass"
-    storage = f"sqlite:///{os.getcwd()}/Databases/optuna_bh_mass_{i:02d}"
-
-    study = optuna.load_study(study_name=name, storage=storage)
-
-    best_trial = study.best_trial
-    params     = best_trial.params
-
-    learning_rate = params["learning_rate"]
-    weight_decay  = params["weight_decay"]
-    n_layers      = params["n_layers"]
-    out_features  = [params[f"n_units_l{i}"] for i in range(n_layers)]
-    dropout_rate  = [params[f"dropout_l{i}"] for i in range(n_layers)]
-    input_size    = 6
-    output_size   = 2
-    nepoch        = 500
-    name_model    = name
-
-    hparams = em.Hyperparameters(
-        learning_rate,
-        weight_decay,
-        n_layers,
-        out_features,
-        dropout_rate,
-        nepoch,
-        output_size,
-        name_model,
-        input_size
-    )
-
-    model = em.load_model(hparams, device=device).to(device)
-
-    for p in [2]:
-        x, var = get_emulator_param(p)
-        eparam = torch.tensor(x, dtype=torch.float, device=device)
-                
-        # Make predictions using the model
-        out = model(eparam).cpu().detach().numpy()
-        means = out[:, :output_size]
-        stds  = out[:, output_size:]
-        
-        mean = np.mean(slopes_b, axis=0)
-        std = np.std(slopes_b, axis=0)
-        out = (slopes_b - mean) / std
-                
-        y = means * std + mean
-        e = stds * std
-
-        # Plot for individual model (optional)
-        if p in [0, 1, 2]:
-            var = np.log10(var)
-        
-        all_preds_agn.append(y)
-        all_errs_agn.append(e)
-        agn = var
-            
-all_preds_sn1 = np.array(all_preds_sn1)
-all_errs_sn1  = np.array(all_errs_sn1 )
-all_preds_sn2 = np.array(all_preds_sn2)
-all_errs_sn2  = np.array(all_errs_sn2 )
-all_preds_agn = np.array(all_preds_agn)
-all_errs_agn  = np.array(all_errs_agn )
-
 fig, axs = plt.subplots(1, 4, figsize=(13, 4), gridspec_kw={'width_ratios':[1,1,0.2,1]})
 axs[2].axis('off')
 axs = [axs[0], axs[1], axs[3]]
-labels = [r'$\log(\bar{e}_w)$', r'$\log(\kappa_w)$', r'$\log(\epsilon_{f,\,{\rm high}})$']
 
-colors  = [cmap(0.45), cmap(0.45), cmap(0.01), cmap(0.75)]
-markers = ['s','o','d']
-ls      = ['-',':','-.']
-
-all_preds = [all_preds_sn1, all_preds_sn2, all_preds_agn]
-all_errs  = [all_errs_sn1, all_errs_sn2, all_errs_agn]
-all_vars  = [sn1, sn2, agn, om, s8]
-names     = ['sn1', 'sn2', 'agn']
-fids      = [np.log10(3.6), np.log10(7.4), np.log10(0.1)]
-txt_locs  = [np.log10(3.8), np.log10(7.7), np.log10(0.105)]
-
-for i, this_pred in enumerate(all_preds):
-    this_err  = all_errs[i]
-    this_var  = all_vars[i]
-    ax        = axs[i]
-    this_sp   = np.log10(sim_params[i]) if i < 3 else sim_params[i]
-    this_sp   = this_sp[mask]
-    this_name = names[i]
-
-    ensemble_mean = np.mean(this_pred, axis=0)
-    ensemble_std  = np.std(this_pred, axis=0)
-    model_uncertainty = np.mean(this_err, axis=0)
-    total_uncertainty = np.sqrt(ensemble_std**2 + np.mean(this_err**2, axis=0))
+halo_masses = [12.0, 11.8, 12.2]
+for hhh, mhalo in enumerate(halo_masses):
+    print(f'Starting {hhh}...')
+    all_preds_sn1 = []
+    all_errs_sn1  = []
+    all_preds_sn2 = []
+    all_errs_sn2  = []
+    all_preds_agn = []
+    all_errs_agn  = []
     
-    ax.plot(this_var, ensemble_mean[:, 0], color=colors[i], lw=3, ls='-')
-    ax.fill_between(this_var,
-                    (ensemble_mean[:, 0] + total_uncertainty[:, 0]),
-                    (ensemble_mean[:, 0] - total_uncertainty[:, 0]),
-                    color=colors[i], alpha=0.35)
-    ax.plot(this_var,ensemble_mean[:, 0] + total_uncertainty[:, 0],color=colors[i], lw=1)
-    ax.plot(this_var,ensemble_mean[:, 0] - total_uncertainty[:, 0],color=colors[i], lw=1)
-
-    # _x_ = this_sp[mask]
-    # _y_ = slopes[:,0]
-    # if i == 2:
-    #     _x_ = this_sp[mask_b]
-    #     _y_ = slopes_b[:, 0]
-    # ax.scatter(_x_, _y_, color=colors[i], marker='o', s=10, alpha=0.3,
-    #            rasterized=True, facecolor='none')
+    sn1 = None
+    sn2 = None
+    agn = None
+    om  = None
+    s8  = None
     
-    # validation_x    = np.linspace(np.min(_x_), np.max(_x_), 40)
-    # dx = validation_x[1] - validation_x[0]
-
-    # validation_x    = np.linspace(np.min(_x_), np.max(_x_)+dx, 40)
-    # validation_y    = np.zeros(len(validation_x))
-    # validation_yerr = np.zeros(len(validation_x))
-
-    # for index, x in enumerate(validation_x):
-    #     within_dx = (_x_ > x) & (_x_ < x+dx)
-    #     validation_y[index]    = np.mean(_y_[within_dx])
-    #     validation_yerr[index] = np.std(_y_[within_dx])
-
-    # ax.plot(validation_x, validation_y, color='k', lw=3)
-    # ax.fill_between(validation_x, 
-    #                 validation_y+validation_yerr,
-    #                 validation_y-validation_yerr,
-    #                 color='k', alpha=0.3
-    # )
+    s = []
     
-    ax.set_xlabel(labels[i])
+    for i in range(10):
+        name    = f"sh_mass"
+        storage = f"sqlite:///{os.getcwd()}/Databases/optuna_{name}_{i:02d}"
+    
+        study = optuna.load_study(study_name=name, storage=storage)
+    
+        best_trial = study.best_trial
+        params     = best_trial.params
+    
+        learning_rate = params["learning_rate"]
+        weight_decay  = params["weight_decay"]
+        n_layers      = params["n_layers"]
+        out_features  = [params[f"n_units_l{i}"] for i in range(n_layers)]
+        dropout_rate  = [params[f"dropout_l{i}"] for i in range(n_layers)]
+        input_size    = 6
+        output_size   = 2
+        nepoch        = 500
+        name_model    = name
+    
+        hparams = em.Hyperparameters(
+            learning_rate,
+            weight_decay,
+            n_layers,
+            out_features,
+            dropout_rate,
+            nepoch,
+            output_size,
+            name_model,
+            input_size
+        )
+    
+        model = em.load_model(hparams, device=device).to(device)
+    
+        for p in [0, 1]:
+            x, var = get_emulator_param(p, default_halo_mass=mhalo)
+            eparam = torch.tensor(x, dtype=torch.float, device=device)
+                    
+            # Make predictions using the model
+            out = model(eparam).cpu().detach().numpy()
+            means = out[:, :output_size]
+            stds  = out[:, output_size:]
+            
+            mean = np.mean(slopes, axis=0)
+            std = np.std(slopes, axis=0)
+            out = (slopes - mean) / std
+            
+            y = means * std + mean
+            e = stds * std
+            # Denormalize the predictions
+    #         out  = np.log10(slopes + 1)
+    #         mean = np.mean(out, axis=0)
+    #         std  = np.std(out, axis=0)
+    
+    #         y    = np.power(10, pred[:, 0] * std + mean) - 1  # Predicted values
+    #         e    = np.log(10) * std * np.power(10, pred[:, 0] * std + mean) * pred[:, 1]  # Uncertainty (error)
+    
+            # Plot for individual model (optional)
+            if p in [0, 1, 2]:
+                var = np.log10(var)
+            
+            # Store predictions and uncertainties
+            if p == 0:
+                all_preds_sn1.append(y)
+                all_errs_sn1.append(e)
+                sn1 = var
+            elif p == 1:
+                all_preds_sn2.append(y)
+                all_errs_sn2.append(e)
+                sn2 = var
+    
+    for i in range(10):
+        name    = f"bh_mass"
+        storage = f"sqlite:///{os.getcwd()}/Databases/optuna_bh_mass_{i:02d}"
+    
+        study = optuna.load_study(study_name=name, storage=storage)
+    
+        best_trial = study.best_trial
+        params     = best_trial.params
+    
+        learning_rate = params["learning_rate"]
+        weight_decay  = params["weight_decay"]
+        n_layers      = params["n_layers"]
+        out_features  = [params[f"n_units_l{i}"] for i in range(n_layers)]
+        dropout_rate  = [params[f"dropout_l{i}"] for i in range(n_layers)]
+        input_size    = 6
+        output_size   = 2
+        nepoch        = 500
+        name_model    = name
+    
+        hparams = em.Hyperparameters(
+            learning_rate,
+            weight_decay,
+            n_layers,
+            out_features,
+            dropout_rate,
+            nepoch,
+            output_size,
+            name_model,
+            input_size
+        )
+    
+        model = em.load_model(hparams, device=device).to(device)
+    
+        for p in [2]:
+            x, var = get_emulator_param(p)
+            eparam = torch.tensor(x, dtype=torch.float, device=device)
+                    
+            # Make predictions using the model
+            out = model(eparam).cpu().detach().numpy()
+            means = out[:, :output_size]
+            stds  = out[:, output_size:]
+            
+            mean = np.mean(slopes_b, axis=0)
+            std = np.std(slopes_b, axis=0)
+            out = (slopes_b - mean) / std
+                    
+            y = means * std + mean
+            e = stds * std
+    
+            # Plot for individual model (optional)
+            if p in [0, 1, 2]:
+                var = np.log10(var)
+            
+            all_preds_agn.append(y)
+            all_errs_agn.append(e)
+            agn = var
+                
+    all_preds_sn1 = np.array(all_preds_sn1)
+    all_errs_sn1  = np.array(all_errs_sn1 )
+    all_preds_sn2 = np.array(all_preds_sn2)
+    all_errs_sn2  = np.array(all_errs_sn2 )
+    all_preds_agn = np.array(all_preds_agn)
+    all_errs_agn  = np.array(all_errs_agn )
+    
+    labels = [r'$\log(\bar{e}_w)$', r'$\log(\kappa_w)$', r'$\log(\epsilon_{f,\,{\rm high}})$']
+    
+    colors  = [cmap(0.45), cmap(0.45), cmap(0.01), cmap(0.75)]
+    markers = ['s','o','d']
+    ls      = ['-',':','-.']
+    
+    all_preds = [all_preds_sn1, all_preds_sn2, all_preds_agn]
+    all_errs  = [all_errs_sn1, all_errs_sn2, all_errs_agn]
+    all_vars  = [sn1, sn2, agn, om, s8]
+    names     = ['sn1', 'sn2', 'agn']
+    fids      = [np.log10(3.6), np.log10(7.4), np.log10(0.1)]
+    txt_locs  = [np.log10(3.8), np.log10(7.7), np.log10(0.105)]
+    
+    for i, this_pred in enumerate(all_preds):
+        this_err  = all_errs[i]
+        this_var  = all_vars[i]
+        ax        = axs[i]
+        this_sp   = np.log10(sim_params[i]) if i < 3 else sim_params[i]
+        this_sp   = this_sp[mask]
+        this_name = names[i]
+    
+        ensemble_mean = np.mean(this_pred, axis=0)
+        ensemble_std  = np.std(this_pred, axis=0)
+        model_uncertainty = np.mean(this_err, axis=0)
+        total_uncertainty = np.sqrt(ensemble_std**2 + np.mean(this_err**2, axis=0))
+
+        if hhh == 0:
+            ax.plot(this_var, ensemble_mean[:, 0], color=colors[i], lw=3, ls='-')
+            ax.fill_between(this_var,
+                            (ensemble_mean[:, 0] + total_uncertainty[:, 0]),
+                            (ensemble_mean[:, 0] - total_uncertainty[:, 0]),
+                            color=colors[i], alpha=0.35)
+            ax.plot(this_var,ensemble_mean[:, 0] + total_uncertainty[:, 0],color=colors[i], lw=1)
+            ax.plot(this_var,ensemble_mean[:, 0] - total_uncertainty[:, 0],color=colors[i], lw=1)
+            ax.set_xlabel(labels[i])
+            
+            ax.axvline(x=fids[i],ymin=0.9,ymax=1, color='tomato' if BW else 'red', ls='-', alpha=0.5,lw=2)
+            
+            yval = 11.2
+            if i == 2:
+                yval = 8.23
+            ax.text(txt_locs[i],yval,r'${\rm TNG~Fiducial}$',color='red',
+                    fontsize=12,ha='left',va='bottom', alpha=0.5)
+        else:
+            lss = [None,'--',':']
+            ax.plot(this_var, ensemble_mean[:, 0], color=colors[i], lw=3, ls=lss[hhh])
+    
+            ax.fill_between(this_var,
+                            (ensemble_mean[:, 0] + total_uncertainty[:, 0]),
+                            (ensemble_mean[:, 0] - total_uncertainty[:, 0]),
+                            color=colors[i], alpha=0.1)
+    
+        # _x_ = this_sp[mask]
+        # _y_ = slopes[:,0]
+        # if i == 2:
+        #     _x_ = this_sp[mask_b]
+        #     _y_ = slopes_b[:, 0]
+        # ax.scatter(_x_, _y_, color=colors[i], marker='o', s=10, alpha=0.3,
+        #            rasterized=True, facecolor='none')
         
-    ax.axvline(x=fids[i],ymin=0.9,ymax=1, color='tomato' if BW else 'red', ls='-', alpha=0.5,lw=2)
+        # validation_x    = np.linspace(np.min(_x_), np.max(_x_), 40)
+        # dx = validation_x[1] - validation_x[0]
     
-    yval = 11.05
-    if i == 2:
-        yval = 8.09
-    ax.text(txt_locs[i],yval,r'${\rm TNG~Fiducial}$',color='red',
-            fontsize=12,ha='left',va='bottom', alpha=0.5)
+        # validation_x    = np.linspace(np.min(_x_), np.max(_x_)+dx, 40)
+        # validation_y    = np.zeros(len(validation_x))
+        # validation_yerr = np.zeros(len(validation_x))
+    
+        # for index, x in enumerate(validation_x):
+        #     within_dx = (_x_ > x) & (_x_ < x+dx)
+        #     validation_y[index]    = np.mean(_y_[within_dx])
+        #     validation_yerr[index] = np.std(_y_[within_dx])
+    
+        # ax.plot(validation_x, validation_y, color='k', lw=3)
+        # ax.fill_between(validation_x, 
+        #                 validation_y+validation_yerr,
+        #                 validation_y-validation_yerr,
+        #                 color='k', alpha=0.3
+        # )
 
-axs[0].set_ylabel(r'$\log(M_\star~[M_\odot])$')
-axs[2].set_ylabel(r'$\log(M_{\rm BH}~[M_\odot])$')
+axs[0].set_ylabel(r'$\log(M_\star~[{\rm M}_\odot])$')
+axs[2].set_ylabel(r'$\log(M_{\rm BH}~[{\rm M}_\odot])$')
 
 gbl_ymin, gbl_ymax = np.inf, -np.inf
 
@@ -366,7 +377,24 @@ axs[0].set_ylim(gbl_ymin, gbl_ymax)
 axs[1].set_ylim(gbl_ymin, gbl_ymax)
 
 axs[1].set_yticklabels([])
-        
+
+legend_elements = [
+    Line2D([0], [0], color='k', lw=2, ls='--', label=r'$M_{\rm Halo}=10^{11.8}~{\rm M}_\odot$'),
+    Line2D([0], [0], color='k', lw=2, ls='-' , label=r'$M_{\rm Halo}=10^{12.0}~{\rm M}_\odot$'),
+    Line2D([0], [0], color='k', lw=2, ls=':' , label=r'$M_{\rm Halo}=10^{12.2}~{\rm M}_\odot$'),
+]
+
+legend_labels = [
+    r'$M_{\rm Halo}=10^{11.8}~{\rm M}_\odot$',
+    r'$M_{\rm Halo}=10^{12.0}~{\rm M}_\odot$',
+    r'$M_{\rm Halo}=10^{12.2}~{\rm M}_\odot$',
+]
+leg = axs[0].legend(legend_elements, legend_labels, loc='lower left', frameon=False,
+                    fontsize=12)
+frame = leg.get_frame()
+frame.set_boxstyle("square")
+frame.set_alpha(0.5)
+
 # axs[0].text(0.05,0.075,r'${\rm SN~Wind~Energy}$',transform=axs[0].transAxes)
 # axs[1].text(0.05,0.075,r'${\rm SN~Wind~Speeds}$',transform=axs[1].transAxes)
 # axs[2].text(0.05,0.075,r'${\rm AGN~Thermal~Energy}$',transform=axs[2].transAxes)
