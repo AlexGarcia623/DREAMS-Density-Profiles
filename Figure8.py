@@ -48,7 +48,7 @@ mpl.rcParams['ytick.minor.size'] = 4.5
 mpl.rcParams['xtick.top']   = True
 mpl.rcParams['ytick.right'] = True
 
-in_file  = 'CDM_baryon_contract_update.hdf5'
+in_file  = './data/CDM_baryon_contract_update.hdf5'
 
 basedir    = '/standard/DREAMS/'
 sim_params = get_params(basedir+'Parameters/CDM/MW_zooms/CDM_TNG_MW_SB5.txt')
@@ -208,10 +208,10 @@ for which_param in range(5):
         ax_big.plot(x, median, color=cmap(0.75), lw=2.75)
         ax_big.fill_between(x, low, high, color=cmap(0.75), alpha=0.25)
         
-        np.save('./data/F6_median_x.npy', x)
-        np.save('./data/F6_median_y.npy', median)
-        np.save('./data/F6_low_y.npy'   , low)
-        np.save('./data/F6_high_y.npy'  , high)
+        np.save('./data/Fig8_median_x.npy', x)
+        np.save('./data/Fig8_median_y.npy', median)
+        np.save('./data/Fig8_low_y.npy'   , low)
+        np.save('./data/Fig8_high_y.npy'  , high)
         
         ax_big.set_xscale('log')
         
@@ -292,5 +292,4 @@ ax_big.set_xlabel(r'${\rm Radius}/R_{\rm 200}$')
 
 plt.tight_layout()
 plt.subplots_adjust(wspace=0.0,hspace=0.025)
-plt.savefig(f'./figs/AC_params_weighted.pdf',bbox_inches='tight')
-# plt.savefig(f'./figs/AC_params_fixed_Aw_Garcia.pdf',bbox_inches='tight')
+plt.savefig(f'./figs/Figure8.pdf',bbox_inches='tight')
