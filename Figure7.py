@@ -11,7 +11,7 @@ from matplotlib.legend_handler import HandlerBase
 
 import matplotlib.gridspec as gridspec
 
-from tutorial import get_params, get_box_size
+from tutorial import get_params
 
 from scipy.interpolate import interp1d
 
@@ -43,8 +43,8 @@ mpl.rcParams['ytick.minor.size'] = 4.5*0.75
 mpl.rcParams['xtick.top']   = True
 mpl.rcParams['ytick.right'] = True
 
-in_file  = '../CDM/CDM_density_profiles.hdf5'
-in2_file = 'CDM_DMO_density_profiles.hdf5'
+in_file  = './data/CDM_density_profiles.hdf5'
+in2_file = './data/CDM_DMO_density_profiles.hdf5'
 
 basedir    = '/standard/DREAMS/'
 sim_params = get_params(basedir+'Parameters/CDM/MW_zooms/CDM_TNG_MW_SB5.txt')
@@ -101,7 +101,7 @@ def get_bin_idx(point, npoints=29):
         all_idx.append(idx)
     return np.array(all_idx)
 
-weights = np.load('../CDM/data/arya_weights_binned.npy')
+weights = np.load('./data/arya_weights_binned.npy')
 params = sim_params[:,2:5]
 ws = np.zeros(1024)
 for i in range(1024):
@@ -141,8 +141,8 @@ class HandlerLineWithFill(HandlerBase):
                       color=line_color, lw=2, transform=trans, ls=ls)
         return [fill, line]
     
-rvir_dmo   = np.load('./data/rvir.npy')
-rvir_hydro = np.load('../CDM/data/rvir.npy') / h
+rvir_dmo   = np.load('./data/rvir_dmo.npy')
+rvir_hydro = np.load('./data/rvir.npy') / h
 
 Omega_m = sim_params[:,0]
 Omega_b = 0.046
@@ -308,8 +308,8 @@ for which in range(0,5):
         
         hydro_x = np.load('./data/hydro_x.npy')
         hydro_y = np.load('./data/hydro_y.npy')
-        hydro_y_low   = np.load('./data/hydor_yerr_low.npy')
-        hydro_y_upper = np.load('./data/hydor_yerr_high.npy')
+        hydro_y_low   = np.load('./data/hydro_yerr_low.npy')
+        hydro_y_upper = np.load('./data/hydro_yerr_high.npy')
         
         ax_big.plot(hydro_x, hydro_y, color='red' if BW else 'mediumorchid', alpha=0.5, ls='--', lw=3)
         ax_big.fill_between(hydro_x, hydro_y_low,hydro_y_upper, color='red' if BW else 'mediumorchid', alpha=0.2)
@@ -369,4 +369,4 @@ ax_big.set_ylabel(r'${\rm Density~}[M_\odot/{\rm kpc}^3]$')
 plt.tight_layout()
 plt.subplots_adjust(wspace=0.0,hspace=0.025)
 
-plt.savefig(f'./figs/comp_baryon_ratio_weighted.pdf',bbox_inches='tight')
+plt.savefig(f'./figs/Figure7.pdf',bbox_inches='tight')
