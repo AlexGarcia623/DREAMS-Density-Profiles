@@ -316,7 +316,7 @@ for i, this_pred in enumerate(all_preds):
         
     print(np.mean(total_uncertainty,axis=0))
         
-    for j in range(2):        
+    for j in range(2):
         if j == 0:
             ax.plot(this_var, ensemble_mean[:, j], color=colors[j], lw=3, ls=ls[j])            
             ax.fill_between(this_var,
@@ -327,32 +327,32 @@ for i, this_pred in enumerate(all_preds):
             ax.plot(this_var,ensemble_mean[:, j] + total_uncertainty[:, j], color=colors[j], lw=1)
             ax.plot(this_var,ensemble_mean[:, j] - total_uncertainty[:, j], color=colors[j], lw=1)
                         
-            ax.scatter(this_sp, slopes[:, j], color=colors[j], marker=markers[j], s=10, alpha=0.1,
-                       rasterized=True, facecolor='none')
+            # ax.scatter(this_sp, slopes[:, j], color=colors[j], marker=markers[j], s=10, alpha=0.1,
+            #            rasterized=True, facecolor='none')
 
-            validation_x    = np.linspace(np.min(this_sp), np.max(this_sp), 40)
-            dx = validation_x[1] - validation_x[0]
+            # validation_x    = np.linspace(np.min(this_sp), np.max(this_sp), 40)
+            # dx = validation_x[1] - validation_x[0]
             
-            validation_x    = np.linspace(np.min(this_sp), np.max(this_sp)+dx, 40)
-            validation_y    = np.zeros(len(validation_x))
-            validation_yerr = np.zeros(len(validation_x))
+            # validation_x    = np.linspace(np.min(this_sp), np.max(this_sp)+dx, 40)
+            # validation_y    = np.zeros(len(validation_x))
+            # validation_yerr = np.zeros(len(validation_x))
             
-            for index, x in enumerate(validation_x):
-                within_dx = (this_sp > x) & (this_sp < x+dx)
-                validation_y[index]    = np.mean(slopes[:, j] [within_dx])
-                validation_yerr[index] = np.std(slopes[:, j] [within_dx])
+            # for index, x in enumerate(validation_x):
+            #     within_dx = (this_sp > x) & (this_sp < x+dx)
+            #     validation_y[index]    = np.mean(slopes[:, j] [within_dx])
+            #     validation_yerr[index] = np.std(slopes[:, j] [within_dx])
             
-            ax.plot(validation_x, validation_y, color='k', lw=3)
-            ax.fill_between(validation_x, 
-                            validation_y+validation_yerr,
-                            validation_y-validation_yerr,
-                            color='k', alpha=0.3
-            )
-            
+            # ax.plot(validation_x, validation_y, color='k', lw=3)
+            # ax.fill_between(validation_x, 
+            #                 validation_y+validation_yerr,
+            #                 validation_y-validation_yerr,
+            #                 color='k', alpha=0.3
+            # )
+
     ax.set_xlabel(labels[i])
         
-    ax.axvline(x=fids[i],ymin=0.9,ymax=1, color='red', ls='-', alpha=0.5,lw=2)
     if i != 5:
+        ax.axvline(x=fids[i],ymin=0.9,ymax=1, color='red', ls='-', alpha=0.5,lw=2)
         ax.text(txt_locs[i],7.32,r'${\rm TNG~Fiducial}$',color='red',fontsize=12,ha='left',va='bottom', alpha=0.5)
     
     if i in [0, 3]:

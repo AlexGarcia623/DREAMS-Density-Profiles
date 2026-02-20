@@ -91,7 +91,7 @@ plt.xlabel(r'${\rm Weight~Value}$')
 plt.ylabel(r'${\rm Count}$')
 
 plt.tight_layout()
-plt.savefig('./figs/weights.pdf', bbox_inches='tight')
+# plt.savefig('./figs/weights.pdf', bbox_inches='tight')
 
 plt.close()
 
@@ -301,10 +301,10 @@ for which in range(0,5):
         low     = median-weighted_std(all_profs, weights=ws)
         high    = median+weighted_std(all_profs, weights=ws)
         scatter = np.log10(high) - np.log10(low)
-        ax_big.plot(x, median, color=cmap(0.75), lw=2, alpha=0.75)
-        ax_big.fill_between(x, low, high, color=cmap(0.75), alpha=0.25)
-        ax_big.plot(x, low , color=cmap(0.75), lw=0.5, alpha=0.25)
-        ax_big.plot(x, high, color=cmap(0.75), lw=0.5, alpha=0.25)
+        ax_big.plot(x, median, color=cmap(0.75), lw=2, alpha=0.75, rasterized=True)
+        ax_big.fill_between(x, low, high, color=cmap(0.75), alpha=0.25, rasterized=True)
+        ax_big.plot(x, low , color=cmap(0.75), lw=0.5, alpha=0.25, rasterized=True)
+        ax_big.plot(x, high, color=cmap(0.75), lw=0.5, alpha=0.25, rasterized=True)
         
         np.save('../CDM_DMO/data/hydro_x.npy',x)
         np.save('../CDM_DMO/data/hydro_y.npy',median)
@@ -348,7 +348,7 @@ for which in range(0,5):
                             fontsize=12,
                             handler_map={tuple: HandlerLineWithFill()})
         
-        colors = ['gray', cmap(0.75)]
+        colors = [cmap(0.75)]
         for index, text in enumerate(leg.get_texts()):
             text.set_color(colors[index])
         
